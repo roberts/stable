@@ -1,13 +1,14 @@
 /**
  *
  *
+   $USDS - USD Swamp Stablecoin
+   https://usdswamp.com
+   https://x.com/usdswamp
+   https://t.me/usdswamp
+
    Contract features:
    100,000,000 tokens
-   3% buy tax in ETH sent to community, marketing & developer
-   16% launch sell tax in ETH sent to community, marketing, & developer
-   Function to reduce taxes to 3/3
-   Function to remove taxes
-   Removable anti-whale restrictions of max transaction & max wallet
+   No taxes
  */
 
 // SPDX-License-Identifier: MIT
@@ -1136,7 +1137,7 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
     ) external;
 }
 
-contract Tuesday is ERC20, Ownable {
+contract USDSwamp is ERC20, Ownable {
     using SafeMath for uint256;
 
     IUniswapV2Router02 public immutable uniswapV2Router;
@@ -1145,90 +1146,24 @@ contract Tuesday is ERC20, Ownable {
         address(0x000000000000000000000000000000000000dEaD);
 
     string public exchangeLink = "https://app.uniswap.or/swap";
-    string public websiteLink = "https://DrewRoberts.com";
-
-    address public communityWallet;
-    address public marketingWallet;
-    address public developerWallet;
+    string public websiteLink = "https://usdswamp.com";
 
     bool public tradable = false;
     bool public swappable = false;
     bool private swapping;
     uint256 public swapTokenAmount;
 
-    bool public restrictions = true;
-    uint256 public restrictMaxTransaction;
-    uint256 public restrictMaxWallet;
-
-    bool public taxation = true;
-    bool public taxLopsided = true;
-
-    uint256 public totalBuyTax;
-    uint256 public totalSellTax;
-    uint256 private communityTax;
-    uint256 private marketingTax;
-    uint256 private developerTax;
-
-    uint256 public totalLopsidedSellTax;
-    uint256 private communityLopsidedSellTax;
-    uint256 private marketingLopsidedSellTax;
-    uint256 private developerLopsidedSellTax;
-
-    uint256 private communityTokens;
-    uint256 private marketingTokens;
-    uint256 private developerTokens;
-
     mapping(address => bool) private automatedMarketMakerPairs;
-
-    event ExcludeFromFees(address indexed account, bool isExcluded);
 
     event SetAutomatedMarketMakerPair(address indexed pair, bool indexed value);
 
-    event communityWalletUpdated(
-        address indexed newWallet,
-        address indexed oldWallet
-    );
-
-    event marketingWalletUpdated(
-        address indexed newWallet,
-        address indexed oldWallet
-    );
-
-    event developerWalletUpdated(
-        address indexed newWallet,
-        address indexed oldWallet
-    );
-
-    constructor() ERC20("Tuesday", "TUES") {
+    constructor() ERC20("USD Swamp Stablecoin", "USDS") {
         uniswapV2Router = IUniswapV2Router02(
             0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24
         );
         _approve(address(this), address(uniswapV2Router), type(uint256).max);
 
         uint256 totalSupply = 100_000_000 ether;
-
-        swapTokenAmount = totalSupply / 2000; // 0.05% of total supply (50,000 tokens)
-
-        restrictMaxTransaction = totalSupply / 100; // 1% of total supply (1,000,000 tokens)
-        restrictMaxWallet = totalSupply / 20; // 5% of total supply (5,000,000 tokens)
-
-        communityTax = 1;
-        marketingTax = 1;
-        developerTax = 1;
-        totalBuyTax = communityTax + marketingTax + developerTax;
-        totalSellTax = communityTax + marketingTax + developerTax;
-
-        communityLopsidedSellTax = 6;
-        marketingLopsidedSellTax = 6;
-        developerLopsidedSellTax = 4;
-        totalLopsidedSellTax =
-            communityLopsidedSellTax +
-            marketingLopsidedSellTax +
-            developerLopsidedSellTax;
-
-        communityWallet = address(0xC6aa2f0FF6b8563EA418ec2558890D6027413699); // Community Funds
-        marketingWallet = address(0xC6aa2f0FF6b8563EA418ec2558890D6027413699); // Marketing Funds
-        developerWallet = address(0xA6d26E99660de4974B8994eCF75dcD4Cf34951B6); // Developer Funds
 
         _mint(address(this), totalSupply);
 
@@ -1288,90 +1223,6 @@ contract Tuesday is ERC20, Ownable {
     }
 
     /**
-     * @dev Updates the threshold at which the tokens in the contract are automatically swapped for ETH
-     */
-    function updateSwapTokenAmount(
-        uint256 newAmount
-    ) external onlyOwner returns (bool) {
-        require(
-            newAmount >= (totalSupply() * 1) / 100000,
-            "ERC20: Swap amount cannot be lower than 0.001% total supply."
-        );
-        require(
-            newAmount <= (totalSupply() * 5) / 1000,
-            "ERC20: Swap amount cannot be higher than 0.5% total supply."
-        );
-        swapTokenAmount = newAmount;
-        return true;
-    }
-
-    /**
-     * @dev Updates the communityWallet address
-     */
-    function updateCommunityWallet(
-        address _communityWallet
-    ) external onlyOwner {
-        require(_communityWallet != address(0), "ERC20: Address 0");
-        address oldWallet = communityWallet;
-        communityWallet = _communityWallet;
-        emit communityWalletUpdated(communityWallet, oldWallet);
-    }
-
-    /**
-     * @dev Updates the marketingWallet address
-     */
-    function updateMarketingWallet(
-        address _marketingWallet
-    ) external onlyOwner {
-        require(_marketingWallet != address(0), "ERC20: Address 0");
-        address oldWallet = marketingWallet;
-        marketingWallet = _marketingWallet;
-        emit marketingWalletUpdated(marketingWallet, oldWallet);
-    }
-
-    /**
-     * @dev Updates the developerWallet address
-     */
-    // function updateDeveloperWallet(
-    //     address _developerWallet
-    // ) external onlyOwner {
-    //     require(_developerWallet != address(0), "ERC20: Address 0");
-    //     address oldWallet = developerWallet;
-    //     developerWallet = _developerWallet;
-    //     emit developerWalletUpdated(developerWallet, oldWallet);
-    // }
-
-    /**
-     * @dev removes the max transaction and max wallet restrictions
-     * this cannot be reversed
-     */
-    function removeRestrictions() external onlyOwner {
-        restrictions = false;
-    }
-
-    /**
-     * @dev Resets the tax to 3% buy and 16% sell
-     */
-    function resetTax() external onlyOwner {
-        taxation = true;
-        taxLopsided = true;
-    }
-
-    /**
-     * @dev Sets the sell tax to 3%
-     */
-    function reduceSellTax() external onlyOwner {
-        taxLopsided = false;
-    }
-
-    /**
-     * @dev Sets the buy and sell fees to 0%
-     */
-    function removeTax() external onlyOwner {
-        taxation = false;
-    }
-
-    /**
      * @dev Sends any remaining ETH in the contract that wasn't automatically swapped to the owner
      */
     function withdrawStuckETH() public onlyOwner {
@@ -1399,255 +1250,4 @@ contract Tuesday is ERC20, Ownable {
         emit SetAutomatedMarketMakerPair(pair, value);
     }
 
-    /**
-     * @dev Transfer function
-     */
-    function _transfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override {
-        require(from != address(0), "ERC20: transfer from the zero address");
-        require(to != address(0), "ERC20: transfer to the zero address");
-
-        if (amount == 0) {
-            super._transfer(from, to, 0);
-            return;
-        }
-
-        if (
-            from != owner() &&
-            to != owner() &&
-            to != address(0) &&
-            to != deadAddress &&
-            !swapping
-        ) {
-            if (!tradable) {
-                require(
-                    from == owner() ||
-                        from == address(this) ||
-                        from == deadAddress ||
-                        from == communityWallet ||
-                        from == marketingWallet ||
-                        from == developerWallet ||
-                        to == owner() ||
-                        to == address(this) ||
-                        to == deadAddress ||
-                        to == communityWallet ||
-                        to == marketingWallet ||
-                        to == developerWallet,
-                    "ERC20: Token Trading Not Enabled. Be Patient Anon."
-                );
-            }
-
-            //when buy
-            if (automatedMarketMakerPairs[from]) {
-                if (
-                    to != owner() &&
-                    to != address(this) &&
-                    to != deadAddress &&
-                    to != address(uniswapV2Router) &&
-                    to != communityWallet &&
-                    to != marketingWallet &&
-                    to != developerWallet &&
-                    to != address(uniswapV2Pair)
-                ) {
-                    if (restrictions) {
-                        require(
-                            amount <= restrictMaxTransaction,
-                            "ERC20: Max Transaction Exceeded"
-                        );
-                        require(
-                            amount + balanceOf(to) <= restrictMaxWallet,
-                            "ERC20: Max Wallet Exceeded"
-                        );
-                    }
-                }
-            }
-            //when sell
-            else if (automatedMarketMakerPairs[to]) {
-                if (
-                    from != owner() &&
-                    from != address(this) &&
-                    from != deadAddress &&
-                    from != address(uniswapV2Router) &&
-                    from != communityWallet &&
-                    from != marketingWallet &&
-                    from != developerWallet &&
-                    from != address(uniswapV2Pair)
-                ) {
-                    if (restrictions) {
-                        require(
-                            amount <= restrictMaxTransaction,
-                            "ERC20: Max Transaction Exceeded"
-                        );
-                    }
-                }
-            } else if (
-                to != owner() &&
-                to != address(this) &&
-                to != deadAddress &&
-                to != address(uniswapV2Router) &&
-                to != communityWallet &&
-                to != marketingWallet &&
-                to != developerWallet &&
-                to != address(uniswapV2Pair)
-            ) {
-                if (restrictions) {
-                    require(
-                        amount + balanceOf(to) <= restrictMaxWallet,
-                        "ERC20: Max Wallet Exceeded"
-                    );
-                }
-            }
-        }
-
-        uint256 contractTokenBalance = balanceOf(address(this));
-
-        bool canSwap = contractTokenBalance >= swapTokenAmount;
-
-        if (
-            canSwap &&
-            swappable &&
-            !swapping &&
-            !automatedMarketMakerPairs[from] &&
-            from != owner() &&
-            from != address(this) &&
-            from != deadAddress &&
-            from != communityWallet &&
-            from != marketingWallet &&
-            from != developerWallet &&
-            to != owner() &&
-            to != address(this) &&
-            to != deadAddress &&
-            to != communityWallet &&
-            to != marketingWallet &&
-            to != developerWallet
-        ) {
-            swapping = true;
-
-            distributeTax();
-
-            swapping = false;
-        }
-
-        bool taxed = !swapping;
-
-        if (
-            from == owner() ||
-            from == address(this) ||
-            from == deadAddress ||
-            from == communityWallet ||
-            from == marketingWallet ||
-            from == developerWallet ||
-            to == owner() ||
-            to == address(this) ||
-            to == deadAddress ||
-            to == communityWallet ||
-            to == marketingWallet ||
-            to == developerWallet
-        ) {
-            taxed = false;
-        }
-
-        uint256 fees = 0;
-
-        if (taxed) {
-            // Collect Sell Tax
-            if (automatedMarketMakerPairs[to] && taxation) {
-                if (taxLopsided) {
-                    fees = amount.mul(totalLopsidedSellTax).div(100);
-                    communityTokens +=
-                        (fees * communityLopsidedSellTax) /
-                        totalLopsidedSellTax;
-                    marketingTokens +=
-                        (fees * marketingLopsidedSellTax) /
-                        totalLopsidedSellTax;
-                    developerTokens +=
-                        (fees * developerLopsidedSellTax) /
-                        totalLopsidedSellTax;
-                } else {
-                    fees = amount.mul(totalSellTax).div(100);
-                    communityTokens += (fees * communityTax) / totalSellTax;
-                    marketingTokens += (fees * marketingTax) / totalSellTax;
-                    developerTokens += (fees * developerTax) / totalSellTax;
-                }
-            }
-            // Collect Buy Tax
-            else if (automatedMarketMakerPairs[from] && taxation) {
-                fees = amount.mul(totalBuyTax).div(100);
-                communityTokens += (fees * communityTax) / totalBuyTax;
-                marketingTokens += (fees * marketingTax) / totalBuyTax;
-                developerTokens += (fees * developerTax) / totalBuyTax;
-            }
-
-            if (fees > 0) {
-                super._transfer(from, address(this), fees);
-            }
-
-            amount -= fees;
-        }
-
-        super._transfer(from, to, amount);
-    }
-
-    /**
-     * @dev Helper function that swaps tokens in the contract for ETH
-     */
-    function swapTokensForEth(uint256 tokenAmount) private {
-        address[] memory path = new address[](2);
-        path[0] = address(this);
-        path[1] = uniswapV2Router.WETH();
-
-        _approve(address(this), address(uniswapV2Router), tokenAmount);
-
-        // make the swap
-        uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
-            tokenAmount,
-            0,
-            path,
-            address(this),
-            block.timestamp
-        );
-    }
-
-    /**
-     * @dev Helper function that sends the ETH from the contract to the communityWallet, marketingWallet & developerWallet
-     */
-    function distributeTax() private {
-        uint256 contractBalance = balanceOf(address(this));
-        uint256 totalTokensToSwap = communityTokens +
-            marketingTokens +
-            developerTokens;
-        bool success;
-
-        if (contractBalance == 0 || totalTokensToSwap == 0) {
-            return;
-        }
-
-        if (contractBalance > swapTokenAmount * 20) {
-            contractBalance = swapTokenAmount * 20;
-        }
-
-        swapTokensForEth(contractBalance);
-
-        uint256 ethBalance = address(this).balance;
-
-        uint256 ethForCommunity = ethBalance.mul(communityTokens).div(
-            totalTokensToSwap
-        );
-        uint256 ethForMarketing = ethBalance.mul(marketingTokens).div(
-            totalTokensToSwap
-        );
-
-        communityTokens = 0;
-        marketingTokens = 0;
-        developerTokens = 0;
-
-        (success, ) = address(communityWallet).call{value: ethForCommunity}("");
-        (success, ) = address(marketingWallet).call{value: ethForMarketing}("");
-        (success, ) = address(developerWallet).call{
-            value: address(this).balance
-        }("");
-    }
 }
